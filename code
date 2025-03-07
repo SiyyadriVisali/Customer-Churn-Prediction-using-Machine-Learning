@@ -1,0 +1,189 @@
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import pickle
+from matplotlib import pyplot as plt
+import scipy
+from sklearn.model_selection import train_test_split,RandomizedSearchCV
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import accuracy_score,precision_score,recall_score,f1_score,classification_report
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.feature_selection import SelectKBest
+from collections import Counter
+from imblearn.combine import SMOTEENN
+plt.style.use('default')
+import warnings
+warnings.filterwarnings("ignore")
+  #import the dataset
+df=pd.read_csv(r"C:\Users\sksiy\Desktop\GITAM DS INFO\ml\WA_Fn-UseC_-Telco-Customer-Churn.csv")
+df.head()
+#print concise summary of the dataset
+df.info()  
+#check for missing values
+df.isnull().sum()
+#check for duplicate records
+df[df.duplicated()].shape[0]
+#check datatype
+df.dtypes
+#since customerId is not required for prediction so drop it
+df.drop('customerID',axis=1,inplace=True)
+#since total changes is having numerical value but dtype is object to change it into numeric
+df['TotalCharges']=pd.to_numeric(df['TotalCharges'],errors='coerce')
+#print last 5 records of the  dataset
+df.tail(5)
+# Exploratory Data Analysis :
+#pie chart to count senior citizen
+plt.figure(figsize=(10,5))
+plt.pie(df["SeniorCitizen"].value_counts(),autopct="%.1f%%",labels=["No","Yes"])
+plt.show()
+#check the distibution of churn class
+plt.subplot(121)
+sns.countplot(data=df,x="Churn")
+plt.title("Distribution of Churn")
+plt.subplot(122)
+df['Churn'].value_counts().plot(kind='pie',autopct="%1.f%%",labels=['No','Yes'])
+plt.title('Pie chart of Churn')
+plt.tight_layout()
+plt.show()
+#perentage of each class sample distribution
+print("Customer Churn : {}%".format(np.round((len(df[df["Churn"]=="Yes"])/len(df)*100),decimals=2)))
+print("Customer Not Churn : {}%".format(np.round((len(df[df["Churn"]=="No"])/len(df)*100),decimals=2)))
+#how much loss we are having because of customer churn
+churn_customers=df[df["Churn"]=="Yes"]
+loss=churn_customers["TotalCharges"].sum()
+total_revenue=df["TotalCharges"].sum()
+print("We have lost arround {}$ due to customer churn".format(loss))
+print("We have lost arround {} percentage of revengue due to customer churn".format(np.round(loss/total_revenue*100,decimals=2)))
+#plot numerical features with histogram
+fig,axs=plt.subplots(nrows=1,ncols=3,figsize=(18,8))
+axes=axs.flatten()
+num_columns=['tenure', 'MonthlyCharges', 'TotalCharges']
+for i,col in enumerate(num_columns):
+  if(col!='SeniorCitizen'):
+    sns.histplot(x=col,data=df,hue='Churn',ax=axes[i])
+fig.tight_layout()
+plt.show()
+#plot numerical features with boxplot
+fig,axs=plt.subplots(nrows=1,ncols=3,figsize=(16,8))
+axes=axs.flatten()
+num_columns=['tenure', 'MonthlyCharges', 'TotalCharges']
+for i,col in enumerate(num_columns):
+  if(col!='SeniorCitizen'):
+    sns.boxplot(x=col,data=df,showmeans=True,ax=axes[i])
+fig.tight_layout()
+plt.show()
+ sns.pairplot(df.drop(columns="SeniorCitizen"),hue="Churn",kind="scatter")
+plt.show()
+ #plot cateogrical features :
+cat_features=list(df.select_dtypes(include='object').columns)
+cat_features.remove('Churn')
+cat_features.append('SeniorCitizen')
+
+fig,axs=plt.subplots(nrows=4,ncols=4,figsize=(20,10))
+axes=axs.flatten()
+for i,col in enumerate(cat_features):
+    sns.countplot(x=col,hue="Churn",data=df,ax=axes[i])
+#adjust spacing between subplots
+fig.tight_layout()
+plt.show()
+# Data Cleaning
+df.head(5)
+#check for null values
+df.isnull().sum()
+df["TotalCharges"].fillna(df["TotalCharges"].mean(),inplace=True)
+df.isnull().sum().sum()
+#encoding categorical values into numeric using label encoder
+encoder=LabelEncoder()
+for feature in df.select_dtypes(include='object').columns:
+    df[feature]=encoder.fit_transform(df[feature])
+df.head()
+df.dtypes
+#get correlation of churn with other variables
+plt.figure(figsize=(16,6))
+df.corr()["Churn"].sort_values(ascending=False).plot(kind="bar")
+plt.show()
+plt.figure(figsize=(18,9))
+sns.heatmap(df.corr(),annot=True,cmap="rainbow")
+plt.show()
+#seperating independent variables and target variable
+x=df.drop("Churn",axis=1)
+y=df["Churn"]
+x.shape
+ # Feature Selection
+# selecting only 10 features which has higher correlation with churn 
+select_feature=SelectKBest(k=10) #no of features to be select
+select_feature.fit(x,y)
+  #Top 10 high correlated features
+select_feature.get_feature_names_out()
+  x=x[select_feature.get_feature_names_out()]
+xx.shape
+ # according to the feature selection we have selected 10 top features out of 19 features
+
+## split data into training and validation set in 80:20 ratio 
+x_train,x_test,y_train,y_test=train_test_split(x,y,test_size=0.2,random_state=42)
+x_train.shape,y_train.shape,x_test.shape,y_test.shape
+its imbalance dataset
+y.value_counts()
+def evaluate_model_performance(model,test_data):
+    prediction=model.predict(test_data)
+    #print("Training Accurary : ",model.score(x_train,y_train))
+    print("Validation Accurary : {:.2f} %".format(accuracy_score(y_test,prediction)))
+    print("Precision Score : {:.2f} %".format(precision_score(y_test,prediction)))
+    print("Recall Score : {:.2f} %".format(recall_score(y_test,prediction)))
+    print("F1 Score : {:.2f} %".format(f1_score(y_test,prediction)))
+    print(classification_report(y_test,prediction))
+#Random Forest Model without balancing dataset and without hyper paramter tuning
+rand_forest=RandomForestClassifier()
+rand_forest.fit(x_train,y_train)
+#measure the performance of random forest model
+evaluate_model_performance(rand_forest,x_test)
+#GradientBoostingClassifier without balancing dataset and without hyper paramter tuning
+gbc_model=GradientBoostingClassifier( )
+gbc_model.fit(x_train,y_train)
+#measure the performance of GradientBoostingClassifier
+evaluate_model_performance(gbc_model,x_test)
+# as we can see our model is not performing up to the mark because of imbalance nature of dataset so we will balance it to reduce TN,FN and increase TP,FP
+plt.figure(figsize=(8,4))
+y.value_counts().plot(kind="pie",autopct="%1.f%%",labels=['No','Yes'])
+plt.show()
+smote=SMOTEENN()
+x_st,y_st=smote.fit_resample(x,y)
+ y_st.value_counts().plot(kind="bar")
+plt.title("target class distribution after under sampling")
+plt.show()
+y_st.value_counts()
+ #now split training and validation set using balanced dataset
+x_train,x_test,y_train,y_test=train_test_split(x_st,y_st,test_size=0.2,random_state=42)
+x_train.shape,y_train.shape,x_test.shape,y_test.shape
+#Building Model with Balanced Dataset and performance hyper parameter tuning using RandomSearchCV
+param_grid={'n_estimators':[40,80,120,160,200],
+            'max_depth':[2,4,6,8,10],
+            "criterion":['gini'],
+            "random_state":[27,42,43]
+  }
+random_search_cv=RandomizedSearchCV( estimator=RandomForestClassifier(), 
+                                    param_distributions=param_grid,n_iter=12,cv=5,scoring='f1',verbose=1)
+random_search_cv.fit(x_train,y_train) 
+  random_search_cv.best_params_
+#Get final model with best param from RandomizedSearchCV
+rf_final_model=random_search_cv.best_estimator_
+#evaluate Random Forest Classifier
+evaluate_model_performance(rf_final_model,x_test)
+param_grid2 = {'n_estimators':[100, 150, 200, 250, 300],
+             'criterion': ['friedman_mse', 'squared_error', 'mse', 'mae'],
+              'max_depth': [2,4,6,8],
+              'learning_rate': [0.001, 0.01, 0.1, 0.2],
+              'loss': ['deviance', 'exponential']
+              }
+random_search_cv2=RandomizedSearchCV(estimator=GradientBoostingClassifier(random_state=42) , param_distributions=param_grid2,n_iter=12,verbose=1,scoring='f1')
+random_search_cv2.fit(x_train,y_train)
+random_search_cv2.best_params_
+ gb_final_model=random_search_cv2.best_estimator_
+#evaluate final GradientBoostingClassifier Performance
+evaluate_model_performance(gb_final_model,x_test)
+#Save Final Model Integration with application
+file=open("trained_model.pkl","wb")
+pickle.dump(gb_final_model,file)
+file.close()
+  
+  
